@@ -1,77 +1,61 @@
-'use strict'
+'use strict';
 
-var gulp = require('gulp')
-var gutil = require('gulp-util')
-var proc = require('child_process')
+const gulp = require('gulp')
+const gutil = require('gulp-util')
+const exec = require('child_process').exec
 
-var runCommand = function (cmd) {
-  return new Promise(function (resolve, reject) {
+let runCommand = (cmd) => {
+  return new Promise((resolve, reject) => {
     if (!cmd) {
-      reject(new Error('No command specified.'))
-    }
-
-    proc.exec(cmd, function (err, stdout, stderr) {
-      if (err) {
-        reject(err)
-      } else if (stderr) {
-        reject(stderr)
-      } else {
-        resolve(stdout)
-      }
-    })
-  })
-}
-
-var getCurrentCommit = function (commit) {
-  return new Promise(function (resolve, reject) {
-    if (commit) {
-      resolve(commit)
-    } else {
-      var cmd = 'git rev-parse HEAD'
-      runCommand(cmd).then(resolve)
-    }
-  })
-}
-
-var getChangedFiles = function (commit) {
-  if (!commit) {
-    throw new Error('No commit given')
+    reject(new Error('No command specified.'))
   }
 
-  var ref = process.env.GIT_PREVIOUS_SUCCESSFUL_COMMIT || 'master'
+  exec(cmd, function (err, stdout, stderr) {
+    if (err) {
+      reject(err)
+    } else if (stderr) {
+      reject(stderr)
+    } else {
+      resolve(stdout)
+    }
+  })
+})
+}
 
-  var cmd = 'git diff --name-only ' + ref + ' ' + commit
+let getFileChanges = (path) => {
+  if (!path) {
+    throw new Error('No path given')
+  }
+
+  let cmd = `git diff origin/master -- ${path}`
+
   return runCommand(cmd)
 }
 
-var checkForChangelog = function (files) {
-  if (files.length && !files.includes('CHANGELOG.md')) {
-    throw new Error('No CHANGELOG.md update')
+let verifyChangelogChanges = (lines) => {
+  return new Promise((resolve, reject) => {
+    if (lines.length === 0) {
+    reject(new Error('No CHANGELOG.md update'))
+  } else {
+    resolve();
   }
-
-  return true
+})
 }
 
-gulp.task('changelog', function (done) {
-  var commit = process.env.TRAVIS
-    ? process.env.TRAVIS_COMMIT
-    : process.env.GIT_COMMIT
-
-  getCurrentCommit(commit)
-    .then(getChangedFiles)
-    .then(checkForChangelog)
-    .then(function () {
-      done()
-    })
-    .catch(function (err) {
-      gutil.log(gutil.colors.red(err))
-      done(err)
-    })
+gulp.task('changelog', (done) => {
+  getFileChanges('CHANGELOG.md')
+.then(verifyChangelogChanges)
+  .then(() => {
+  done()
+})
+.catch((err) => {
+  gutil.log(gutil.colors.red(err))
+done(err)
+})
 })
 
 module.exports = {
   runCommand: runCommand,
-  getCurrentCommit: getCurrentCommit,
-  getChangedFiles: getChangedFiles,
-  checkForChangelog: checkForChangelog
+  getFileChanges: getFileChanges,
+  verifyChangelogChanges: verifyChangelogChanges
 }
